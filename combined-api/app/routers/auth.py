@@ -7,6 +7,7 @@ from uuid import UUID
 from typing import Optional, Union
 
 from app.core.dependencies import get_current_user, get_db, require_role
+from app.models.authorized_area import AuthorizedArea
 from app.core.security import (
     hash_password,
     verify_password,
@@ -451,6 +452,38 @@ async def update_account_status(
 
     await db.commit()
     return {"message": f"Account status for {target_user.email} updated to {data.account_status}"}
+
+
+# ── LIST USERS (admin) ────────────────────────────────────────────────────────
+@router.get("/users")
+async def list_users(
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(require_role("admin")),
+    limit: int = 50,
+    offset: int = 0,
+):
+    """Return all users with basic profile and whether they have an area assigned.
+    Admins use this to look up user UUIDs before calling the area-assignment API."""
+    result = await db.execute(
+        select(User, AuthorizedArea)
+        .outerjoin(AuthorizedArea, User.user_id == AuthorizedArea.user_id)
+        .order_by(User.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    rows = result.all()
+
+    return [
+        {
+            "user_id": str(user.user_id),
+            "user_name": user.user_name,
+            "email": user.email,
+            "role": user.role,
+            "account_status": user.account_status,
+            "has_area": area is not None and area.authorized_area is not None,
+        }
+        for user, area in rows
+    ]
 
 
 # ── ME ─────────────────────────────────────────────────────

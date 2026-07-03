@@ -38,6 +38,8 @@ class TestRegister:
         existing_user = User(
             user_id=uuid.uuid4(), email="taken@example.com", user_name="x", phone_no="1"
         )
+        print(f"\n[DEBUG] simulating existing user with email='taken@example.com'")
+        print(f"[DEBUG] existing_user.user_id : {existing_user.user_id}")
         # First db.execute call (email lookup) finds a user already
         mock_db.execute.return_value = make_scalar_result(existing_user)
 
@@ -48,14 +50,17 @@ class TestRegister:
             password="Strong1!",
             role="viewer",
         )
+        print(f"[DEBUG] register input : email={data.email!r}, user_name={data.user_name!r}")
 
         with pytest.raises(HTTPException) as exc_info:
             await register(data, fake_request(), mock_db)
 
+        print(f"[DEBUG] HTTPException raised : status_code={exc_info.value.status_code}, detail={exc_info.value.detail!r}")
         assert exc_info.value.status_code == 400
         assert "already registered" in exc_info.value.detail
 
     async def test_duplicate_username_is_rejected(self, mock_db):
+        print(f"\n[DEBUG] simulating: email check -> None, username check -> existing user")
         # 1st execute (email check) -> no match, 2nd (username check) -> match
         mock_db.execute.side_effect = [
             make_scalar_result(None),
@@ -69,14 +74,17 @@ class TestRegister:
             password="Strong1!",
             role="viewer",
         )
+        print(f"[DEBUG] register input : email={data.email!r}, user_name={data.user_name!r}")
 
         with pytest.raises(HTTPException) as exc_info:
             await register(data, fake_request(), mock_db)
 
+        print(f"[DEBUG] HTTPException raised : status_code={exc_info.value.status_code}, detail={exc_info.value.detail!r}")
         assert exc_info.value.status_code == 400
         assert "Username" in exc_info.value.detail
 
     async def test_invalid_role_is_rejected(self, mock_db):
+        print(f"\n[DEBUG] simulating: all uniqueness checks pass, but role='superadmin' is invalid")
         # email, username, phone checks all pass (no duplicates found)
         mock_db.execute.side_effect = [
             make_scalar_result(None),
@@ -94,14 +102,17 @@ class TestRegister:
             password="Strong1!",
             role="superadmin",
         )
+        print(f"[DEBUG] register input : role={data.role!r}")
 
         with pytest.raises(HTTPException) as exc_info:
             await register(data, fake_request(), mock_db)
 
+        print(f"[DEBUG] HTTPException raised : status_code={exc_info.value.status_code}, detail={exc_info.value.detail!r}")
         assert exc_info.value.status_code == 400
         assert "Invalid role" in exc_info.value.detail
 
     async def test_successful_registration_commits_and_returns_message(self, mock_db):
+        print(f"\n[DEBUG] simulating: all uniqueness checks pass, valid role")
         mock_db.execute.side_effect = [
             make_scalar_result(None),  # email check
             make_scalar_result(None),  # username check
@@ -115,9 +126,13 @@ class TestRegister:
             password="Strong1!",
             role="viewer",
         )
+        print(f"[DEBUG] register input : {data}")
 
         result = await register(data, fake_request(), mock_db)
 
+        print(f"[DEBUG] register() returned : {result}")
+        print(f"[DEBUG] mock_db.add called  : {mock_db.add.called}")
+        print(f"[DEBUG] mock_db.commit await count : {mock_db.commit.await_count}")
         assert result == {"message": "User created"}
         mock_db.add.assert_called()  # user object added
         mock_db.commit.assert_awaited_once()
@@ -138,30 +153,38 @@ class TestLogin:
         )
 
     async def test_unknown_email_is_rejected(self, mock_db):
+        print(f"\n[DEBUG] simulating: db returns None for email lookup (user not found)")
         mock_db.execute.return_value = make_scalar_result(None)
 
         data = LoginSchema(email="nobody@example.com", password="whatever1!A", platform="web")
+        print(f"[DEBUG] login input : email={data.email!r}")
 
         with pytest.raises(HTTPException) as exc_info:
             await login(data, fake_request(), mock_db)
 
+        print(f"[DEBUG] HTTPException raised : status_code={exc_info.value.status_code}, detail={exc_info.value.detail!r}")
         assert exc_info.value.status_code == 401
 
     async def test_disabled_account_is_rejected(self, mock_db):
         user = self._make_active_user()
         user.account_status = AccountStatusEnum.DEACTIVATED
+        print(f"\n[DEBUG] simulating deactivated user: email={user.email!r}, account_status={user.account_status}")
         mock_db.execute.return_value = make_scalar_result(user)
 
         data = LoginSchema(email=user.email, password="Strong1!", platform="web")
+        print(f"[DEBUG] login input : email={data.email!r}")
 
         with pytest.raises(HTTPException) as exc_info:
             await login(data, fake_request(), mock_db)
 
+        print(f"[DEBUG] HTTPException raised : status_code={exc_info.value.status_code}, detail={exc_info.value.detail!r}")
         assert exc_info.value.status_code == 403
         assert "disabled" in exc_info.value.detail
 
     async def test_wrong_password_is_rejected(self, mock_db):
         user = self._make_active_user(password="CorrectPass1!")
+        print(f"\n[DEBUG] user stored with password='CorrectPass1!', attempting login with 'WrongPass1!'")
+        print(f"[DEBUG] user.failed_login_attempts (before) : {user.failed_login_attempts}")
         mock_db.execute.return_value = make_scalar_result(user)
 
         data = LoginSchema(email=user.email, password="WrongPass1!", platform="web")
@@ -169,17 +192,26 @@ class TestLogin:
         with pytest.raises(HTTPException) as exc_info:
             await login(data, fake_request(), mock_db)
 
+        print(f"[DEBUG] HTTPException raised : status_code={exc_info.value.status_code}, detail={exc_info.value.detail!r}")
+        print(f"[DEBUG] user.failed_login_attempts (after)  : {user.failed_login_attempts}")
         assert exc_info.value.status_code == 401
         assert user.failed_login_attempts == 1  # incremented on failure
 
     async def test_successful_login_returns_tokens(self, mock_db):
         user = self._make_active_user(password="CorrectPass1!")
+        print(f"\n[DEBUG] user: email={user.email!r}, role={user.role}, account_status={user.account_status}")
+        print(f"[DEBUG] attempting login with correct password 'CorrectPass1!'")
         mock_db.execute.return_value = make_scalar_result(user)
 
         data = LoginSchema(email=user.email, password="CorrectPass1!", platform="web")
 
         result = await login(data, fake_request(), mock_db)
 
+        print(f"[DEBUG] login() returned keys : {list(result.keys())}")
+        print(f"[DEBUG] access_token  : {result.get('access_token', '')[:40]}...")
+        print(f"[DEBUG] refresh_token : {result.get('refresh_token', '')[:40]}...")
+        print(f"[DEBUG] user.failed_login_attempts (after success) : {user.failed_login_attempts}")
+        print(f"[DEBUG] mock_db.commit await count : {mock_db.commit.await_count}")
         assert "access_token" in result
         assert "refresh_token" in result
         assert user.failed_login_attempts == 0
