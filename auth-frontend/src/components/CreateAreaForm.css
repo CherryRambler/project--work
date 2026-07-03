@@ -1,3 +1,4 @@
+/* src/components/CreateAreaForm.css */
 .create-area-form {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -20,13 +21,15 @@
 }
 
 .create-area-form .field label {
+  display: block;
   font-size: 11.5px;
   font-weight: 500;
   color: var(--text-muted);
   margin-bottom: 4px;
 }
 
-.create-area-form .field input {
+.create-area-form .field input,
+.create-area-form .field textarea {
   width: 100%;
   padding: 7px 10px;
   background: var(--surface);
@@ -39,8 +42,15 @@
   outline: none;
 }
 
-.create-area-form .field input:focus {
+.create-area-form .field input:focus,
+.create-area-form .field textarea:focus {
   border-color: var(--accent);
+}
+
+.create-area-form .field textarea {
+  resize: vertical;
+  font-family: var(--mono);
+  font-size: 12px;
 }
 
 .create-area-btn {
@@ -57,7 +67,7 @@
   white-space: nowrap;
 }
 
-.create-area-btn:hover {
+.create-area-btn:hover:not(:disabled) {
   background: var(--accent-hover);
 }
 

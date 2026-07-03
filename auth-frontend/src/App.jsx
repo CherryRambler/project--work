@@ -1,14 +1,37 @@
-import { useAuth } from "./hooks/useAuth";
-import AuthPage from "./pages/AuthPage";
-import DashboardPage from "./pages/DashboardPage";
-import "./styles/global.css";
-import "./App.css";
+// src/App.jsx
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
+import AuthPage from './pages/AuthPage';
+import DashboardPage from './pages/DashboardPage';
+import './App.css';  
 
-export default function App() {
-  const { user } = useAuth();
+function App() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="app-loading">
+        <div className="spinner"></div>
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="app-wrap">
-      {user ? <DashboardPage /> : <AuthPage />}
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route 
+          path="/" 
+          element={user ? <DashboardPage /> : <Navigate to="/auth" />} 
+        />
+        <Route 
+          path="/auth" 
+          element={user ? <Navigate to="/" /> : <AuthPage />} 
+        />
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
+
+export default App;

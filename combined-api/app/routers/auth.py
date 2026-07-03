@@ -230,9 +230,8 @@ async def login(data: LoginSchema, request: Request, db: AsyncSession = Depends(
     await db.commit()
     return {"access_token": access, "refresh_token": refresh}
 
-
 # ── REFRESH ─────────────────────────────────────────────────────
-@router.post("/refresh", response_model=AccessTokenResponseSchema)
+@router.post("/refresh", response_model=TokenResponseSchema)
 async def refresh_token(data: RefreshTokenSchema, request: Request, db: AsyncSession = Depends(get_db)):
     try:
         payload = jwt.decode(
@@ -247,23 +246,47 @@ async def refresh_token(data: RefreshTokenSchema, request: Request, db: AsyncSes
     except JWTError:
         raise HTTPException(401, "Invalid token")
 
+    # Look up the session WITHOUT filtering by is_active first,
+    # so we can distinguish "already used" from "never existed"
     result = await db.execute(
-        select(UserSession).where(
-            UserSession.refresh_token == data.refresh_token,
-            UserSession.is_active.is_(True),
-        )
+        select(UserSession).where(UserSession.refresh_token == data.refresh_token)
     )
     session = result.scalar_one_or_none()
 
     if not session:
         raise HTTPException(401, "Session not found or already logged out")
 
+    # REUSE DETECTION: if this token was already rotated away from,
+    # someone is trying to use a stale/stolen token. Revoke every
+    # active session for this user as a precaution.
+    if not session.is_active:
+        await db.execute(
+            select(UserSession).where(
+                UserSession.user_id == session.user_id,
+                UserSession.is_active.is_(True),
+            )
+        )
+        all_sessions = await db.execute(
+            select(UserSession).where(UserSession.user_id == session.user_id)
+        )
+        for s in all_sessions.scalars().all():
+            s.is_active = False
+
+        await write_audit_log(
+            db=db,
+            action=AuditAction.LOGIN_FAILED,
+            user_id=session.user_id,
+            detail="Refresh token reuse detected — all sessions revoked",
+            ip_address=get_ip(request),
+            success=False,
+        )
+        await db.commit()
+        raise HTTPException(401, "Token reuse detected. All sessions have been revoked. Please log in again.")
+
     if session.expires_at < datetime.now(timezone.utc):
         session.is_active = False
         await db.commit()
         raise HTTPException(401, "Session expired, please log in again")
-
-    session.last_used_at = datetime.now(timezone.utc)
 
     user = await get_user_by_id(db, session.user_id)
 
@@ -272,11 +295,24 @@ async def refresh_token(data: RefreshTokenSchema, request: Request, db: AsyncSes
         await db.commit()
         raise HTTPException(401, "User does not exist or is disabled")
 
+    # ROTATION: invalidate the old refresh token...
+    session.is_active = False
+
     new_access = create_access_token(
-        str(session.user_id),
+        str(user.user_id),
         str(user.role.value),
         user.account_status == AccountStatusEnum.ACTIVATED,
     )
+    new_refresh = create_refresh_token(str(user.user_id))
+
+    new_session = UserSession(
+        user_id=user.user_id,
+        refresh_token=new_refresh,
+        platform=session.platform,
+        ip_address=get_ip(request),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+    )
+    db.add(new_session)
 
     await write_audit_log(
         db=db,
@@ -287,8 +323,7 @@ async def refresh_token(data: RefreshTokenSchema, request: Request, db: AsyncSes
     )
 
     await db.commit()
-    return {"access_token": new_access}
-
+    return {"access_token": new_access, "refresh_token": new_refresh}
 
 # ── LOGOUT ─────────────────────────────────────────────────────
 @router.post("/logout")

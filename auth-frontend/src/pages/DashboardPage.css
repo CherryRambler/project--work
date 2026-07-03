@@ -1,165 +1,79 @@
+/* src/pages/DashboardPage.css */
 .dashboard {
-  width: 100%;
-  max-width: 680px;
-  animation: fadeUp 0.4s ease;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 24px 20px;
 }
 
-/* Header */
-.dash-header {
+.dashboard-loading {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 0 24px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 32px;
-}
-
-.dash-nav {
-  display: flex;
-  align-items: center;
+  justify-content: center;
+  min-height: 300px;
   gap: 16px;
 }
 
-.dash-user {
-  font-size: 12.5px;
-  color: var(--text-muted);
-  font-weight: 400;
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
-.logout-btn {
-  padding: 6px 12px;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  font-family: var(--font);
-  font-size: 12.5px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s;
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
-.logout-btn:hover {
-  border-color: var(--border-strong);
+
+.dashboard-header {
+  margin-bottom: 24px;
+}
+
+.dashboard-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 4px;
   color: var(--text);
 }
 
-/* Hero */
-.dash-hero {
-  margin-bottom: 32px;
-}
-
-.dash-title {
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.5px;
-  margin-bottom: 4px;
-}
-
-.dash-subtitle {
-  font-size: 13.5px;
+.user-role {
+  font-size: 13px;
   color: var(--text-muted);
 }
 
-/* Sections */
-.section {
-  margin-bottom: 28px;
+.areas-section {
+  margin-top: 24px;
 }
 
-.section-label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--text-hint);
-  margin-bottom: 10px;
+.areas-section h3 {
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 12px;
+  color: var(--text);
 }
 
-/* Stats grid */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+.no-areas {
+  color: var(--text-muted);
+  font-size: 14px;
+  padding: 20px 0;
+}
+
+.success-box {
+  background: var(--success-bg);
+  border: 1px solid rgba(45, 106, 79, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--success);
+  margin-bottom: 16px;
+}
+
+.areas-list {
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 }
-
-.stat-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-  transition: border-color 0.15s;
-}
-
-.stat-card:hover { border-color: var(--border-strong); }
-
-.stat-label {
-  font-size: 11.5px;
-  color: var(--text-hint);
-  margin-bottom: 6px;
-  font-weight: 400;
-}
-
-.stat-value {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text);
-}
-
-.stat-value.success { color: var(--success); }
-.stat-value.danger  { color: var(--danger); }
-.stat-value.mono    { font-family: var(--mono); font-size: 12.5px; }
-
-/* Role card */
-.role-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px 18px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.role-card-left { flex: 1; }
-
-.role-card-name { margin-bottom: 6px; }
-
-.role-card-desc {
-  font-size: 12.5px;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-
-.role-card-right {
-  text-align: right;
-  flex-shrink: 0;
-}
-
-.area-label {
-  font-size: 11.5px;
-  color: var(--text-hint);
-  margin-bottom: 5px;
-}
-
-.area-value {
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.area-value.assigned { color: var(--success); }
-.area-value.unset    { color: var(--text-hint); }
-
-/* Role pills */
-.role-pill {
-  display: inline-block;
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  padding: 3px 10px;
-  border-radius: 20px;
-  border: 1px solid;
-}
-
-.role-admin  { background: var(--info-bg);    color: var(--info);    border-color: rgba(29,53,87,0.2); }
-.role-editor { background: #fef3c7;           color: #78350f;        border-color: rgba(120,53,15,0.2); }
-.role-viewer { background: var(--surface2);   color: var(--text-muted); border-color: var(--border); }

@@ -26,7 +26,6 @@ class User(Base):
     role = Column(Enum(RoleEnum), default=RoleEnum.viewer)
     hashed_password = Column(String, nullable=False)
     account_status = Column(Enum(AccountStatusEnum), default=AccountStatusEnum.ACTIVATED, nullable=False)
-    is_active = Column(Boolean, default=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     failed_login_attempts = Column(Integer, default=0, nullable=False)
     locked_until = Column(DateTime(timezone=True), nullable=True)
