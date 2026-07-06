@@ -38,9 +38,10 @@ LOCKOUT_DURATION = timedelta(minutes=5)
 
 
 def get_ip(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    if settings.TRUST_PROXY_HEADERS:
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
 
@@ -73,20 +74,12 @@ async def register(data: RegisterSchema, request: Request, db: AsyncSession = De
     if existing_phone.scalar_one_or_none():
         raise HTTPException(400, "Phone number already registered")
 
-    try:
-        role = RoleEnum(data.role)
-    except ValueError:
-        raise HTTPException(
-            400,
-            f"Invalid role '{data.role}'. Must be one of: {[r.value for r in RoleEnum]}"
-        )
-
     user = User(
         user_name=data.user_name,
         email=data.email,
         phone_no=data.phone_no,
         hashed_password=hash_password(data.password),
-        role=role,
+        role=RoleEnum.viewer,
     )
 
     db.add(user)
@@ -260,12 +253,6 @@ async def refresh_token(data: RefreshTokenSchema, request: Request, db: AsyncSes
     # someone is trying to use a stale/stolen token. Revoke every
     # active session for this user as a precaution.
     if not session.is_active:
-        await db.execute(
-            select(UserSession).where(
-                UserSession.user_id == session.user_id,
-                UserSession.is_active.is_(True),
-            )
-        )
         all_sessions = await db.execute(
             select(UserSession).where(UserSession.user_id == session.user_id)
         )

@@ -1,3 +1,6 @@
+import { MapContainer, TileLayer, Polygon, Popup, useMap } from "react-leaflet";
+import { useEffect } from "react";
+
 function extractCoords(geometry) {
   if (!geometry) return [];
 
@@ -18,6 +21,31 @@ function extractCoords(geometry) {
   return [];
 }
 
+// react-leaflet's Polygon/Marker expect [lat, lng]; GeoJSON stores [lng, lat].
+function toLatLngs(coords) {
+  return coords.map(([lng, lat]) => [lat, lng]);
+}
+
+function centroidOf(latLngs) {
+  const [sumLat, sumLng] = latLngs.reduce(
+    ([lat, lng], [pLat, pLng]) => [lat + pLat, lng + pLng],
+    [0, 0]
+  );
+  return [sumLat / latLngs.length, sumLng / latLngs.length];
+}
+
+function FitToBounds({ latLngs }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (latLngs.length > 0) {
+      map.fitBounds(latLngs, { padding: [24, 24] });
+    }
+  }, [map, latLngs]);
+
+  return null;
+}
+
 export default function AreaMap({ area }) {
   if (!area) {
     return <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>No area data available.</p>;
@@ -33,36 +61,29 @@ export default function AreaMap({ area }) {
     return <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>No boundary data available.</p>;
   }
 
+  const latLngs = toLatLngs(coords);
+  const center = centroidOf(latLngs);
+  const name = area.name || "Assigned Area";
+
   return (
     <div
       style={{
-        background: "var(--surface)",
         border: "1px solid var(--border)",
         borderRadius: "var(--radius)",
-        padding: "14px 18px",
+        overflow: "hidden",
+        height: "360px",
       }}
     >
-      <p style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-muted)", marginBottom: "10px" }}>
-        Boundary coordinates
-      </p>
-      <table style={{ width: "100%", fontSize: "13px", fontFamily: "var(--mono)", borderCollapse: "collapse" }}>
-        <thead>
-          <tr style={{ textAlign: "left", color: "var(--text-hint)", fontSize: "11px" }}>
-            <th style={{ paddingBottom: "6px" }}>#</th>
-            <th style={{ paddingBottom: "6px" }}>Latitude</th>
-            <th style={{ paddingBottom: "6px" }}>Longitude</th>
-          </tr>
-        </thead>
-        <tbody>
-          {coords.map(([lng, lat], i) => (
-            <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
-              <td style={{ padding: "5px 0", color: "var(--text-hint)" }}>{i + 1}</td>
-              <td style={{ padding: "5px 0" }}>{lat.toFixed(5)}°</td>
-              <td style={{ padding: "5px 0" }}>{lng.toFixed(5)}°</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <MapContainer center={center} zoom={13} style={{ width: "100%", height: "100%" }}>
+        <TileLayer
+          attribution='Tiles &copy; Esri'
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+        />
+        <Polygon positions={latLngs} pathOptions={{ color: "#2563eb", fillColor: "#3b82f6", fillOpacity: 0.35 }}>
+          <Popup>{name}</Popup>
+        </Polygon>
+        <FitToBounds latLngs={latLngs} />
+      </MapContainer>
     </div>
   );
 }

@@ -10,9 +10,9 @@ export default function AreaCard({ area, onDelete }) {
         <div className="area-id">
           User ID: {area.user_id}
         </div>
-        {area.authorized_area && (
+        {area.area && (
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Area: {area.authorized_area}
+            Area: {JSON.stringify(area.area)}
           </div>
         )}
       </div>

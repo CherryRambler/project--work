@@ -1,6 +1,6 @@
 // src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { loginApi, logoutApi, getMeApi, refreshTokenApi, getUserAreasApi } from '../api/auth';
+import { loginApi, logoutApi, getMeApi, refreshTokenApi } from '../api/auth';
 
 const AuthContext = createContext();
 
@@ -9,7 +9,6 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem('access_token'));
   const [refreshToken, setRefreshToken] = useState(localStorage.getItem('refresh_token'));
   const [loading, setLoading] = useState(true);
-  const [areas, setAreas] = useState([]);
 
   const fetchUser = async (accessToken) => {
     try {
@@ -26,23 +25,13 @@ export const AuthProvider = ({ children }) => {
     try {
       const data = await loginApi(email, password);
       const { access_token, refresh_token } = data;
-      
+
       localStorage.setItem('access_token', access_token);
       localStorage.setItem('refresh_token', refresh_token);
       setToken(access_token);
       setRefreshToken(refresh_token);
-      
+
       const userData = await fetchUser(access_token);
-      
-      // Fetch areas after login
-      try {
-        const areasData = await getUserAreasApi(access_token, userData.user_id);
-        setAreas(areasData || []);
-      } catch (areaErr) {
-        console.error('Failed to fetch areas:', areaErr);
-        setAreas([]);
-      }
-      
       return userData;
     } catch (error) {
       throw error;
@@ -53,7 +42,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const currentToken = localStorage.getItem('access_token');
       const currentRefresh = localStorage.getItem('refresh_token');
-      
+
       if (currentToken && currentRefresh) {
         await logoutApi(currentToken, currentRefresh);
       }
@@ -65,7 +54,6 @@ export const AuthProvider = ({ children }) => {
       setToken(null);
       setRefreshToken(null);
       setUser(null);
-      setAreas([]);
     }
   };
 
@@ -74,22 +62,23 @@ export const AuthProvider = ({ children }) => {
     const initAuth = async () => {
       const storedToken = localStorage.getItem('access_token');
       const storedRefresh = localStorage.getItem('refresh_token');
-      
+
       if (storedToken && storedRefresh) {
         try {
-          const userData = await fetchUser(storedToken);
-          
-          // Fetch areas on init
-          try {
-            const areasData = await getUserAreasApi(storedToken, userData.user_id);
-            setAreas(areasData || []);
-          } catch (areaErr) {
-            console.error('Failed to fetch areas:', areaErr);
-            setAreas([]);
-          }
+          await fetchUser(storedToken);
         } catch (error) {
-          console.error('Auth initialization failed:', error);
-          logout();
+          // Access token likely expired — try the refresh token before giving up.
+          try {
+            const { access_token, refresh_token } = await refreshTokenApi(storedRefresh);
+            localStorage.setItem('access_token', access_token);
+            localStorage.setItem('refresh_token', refresh_token);
+            setToken(access_token);
+            setRefreshToken(refresh_token);
+            await fetchUser(access_token);
+          } catch (refreshError) {
+            console.error('Auth initialization failed:', refreshError);
+            logout();
+          }
         }
       }
       setLoading(false);
@@ -103,8 +92,6 @@ export const AuthProvider = ({ children }) => {
     token,
     refreshToken,
     loading,
-    areas,
-    setAreas,
     login,
     logout,
   };

@@ -26,7 +26,6 @@ class RegisterSchema(BaseModel):
     email: EmailStr
     phone_no: str
     password: str
-    role: Optional[str] = "viewer"
 
     @field_validator('password')
     @classmethod

@@ -4,18 +4,19 @@ import { getUserAreasApi, createAreaApi, deleteAreaApi } from '../api/auth';
 import ErrorBox from '../components/ErrorBox';
 import CreateAreaForm from '../components/CreateAreaForm';
 import AreaCard from '../components/AreaCard';
+import AreaMap from '../components/AreaMap';
 import './DashboardPage.css';
 
 export default function DashboardPage() {
   const { user, token, loading: authLoading } = useAuth();
-  const [areas, setAreas] = useState([]);
+  const [area, setArea] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [creatingArea, setCreatingArea] = useState(false);
 
   useEffect(() => {
-    const fetchAreas = async () => {
+    const fetchArea = async () => {
       if (!user) {
         setLoading(false);
         return;
@@ -23,8 +24,8 @@ export default function DashboardPage() {
 
       try {
         setLoading(true);
-        const areasData = await getUserAreasApi(token, user.user_id);
-        setAreas(areasData || []);
+        const areaData = await getUserAreasApi(token, user.user_id);
+        setArea(areaData?.has_area ? areaData : null);
       } catch (err) {
         setError(err.message || 'Failed to load areas');
       } finally {
@@ -32,23 +33,20 @@ export default function DashboardPage() {
       }
     };
 
-    fetchAreas();
+    fetchArea();
   }, [user, token]);
 
   const handleCreateArea = async (coordinates) => {
     try {
       setCreatingArea(true);
       setError(null);
-      
-      const result = await createAreaApi(token, user.user_id, {
-        type: 'Polygon',
-        coordinates: [coordinates],
-      });
-      
-      // Refresh areas
-      const areasData = await getUserAreasApi(token, user.user_id);
-      setAreas(areasData);
-      
+
+      await createAreaApi(token, user.user_id, coordinates);
+
+      // Refresh area
+      const areaData = await getUserAreasApi(token, user.user_id);
+      setArea(areaData?.has_area ? areaData : null);
+
       setSuccessMessage('Area created successfully!');
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
@@ -60,12 +58,10 @@ export default function DashboardPage() {
 
   const handleDeleteArea = async (userId) => {
     if (!window.confirm('Are you sure you want to delete this area?')) return;
-    
+
     try {
       await deleteAreaApi(token, userId);
-      // Refresh areas after deletion
-      const areasData = await getUserAreasApi(token, user.user_id);
-      setAreas(areasData);
+      setArea(null);
     } catch (err) {
       setError(err.message || 'Failed to delete area');
     }
@@ -102,17 +98,16 @@ export default function DashboardPage() {
 
       <div className="areas-section">
         <h3>Your Authorized Areas</h3>
-        {areas.length === 0 ? (
+        {!area ? (
           <p className="no-areas">No areas assigned yet.</p>
         ) : (
           <div className="areas-list">
-            {areas.map((area) => (
-              <AreaCard
-                key={area.id || area.user_id}
-                area={area}
-                onDelete={user?.role === 'admin' ? () => handleDeleteArea(area.user_id) : undefined}
-              />
-            ))}
+            <AreaCard
+              key={area.user_id}
+              area={area}
+              onDelete={user?.role === 'admin' ? () => handleDeleteArea(area.user_id) : undefined}
+            />
+            <AreaMap area={area} />
           </div>
         )}
       </div>

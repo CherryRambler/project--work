@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     ALGORITHM: str = "HS256"
+    TRUST_PROXY_HEADERS: bool = False
 
     @field_validator("DEBUG", mode="before")
     @classmethod

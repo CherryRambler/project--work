@@ -8,6 +8,7 @@ from uuid import UUID
 
 from app.core.audit_actions import AuditAction
 from app.core.audit_logger import write_audit_log
+from app.core.config import settings
 from app.core.dependencies import get_current_user, get_db, require_role
 from app.models.audit_log import AuditLog
 from app.models.authorized_area import AuthorizedArea
@@ -18,9 +19,10 @@ router = APIRouter(prefix="/api/v1/areas", tags=["Authorized Areas"])
 
 
 def get_ip(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    if settings.TRUST_PROXY_HEADERS:
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
 
