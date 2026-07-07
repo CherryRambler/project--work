@@ -7,8 +7,8 @@ fixture, and geoalchemy2 / PostGIS calls are patched out so no real
 database or spatial extension is needed.
 
 Endpoint coverage:
-  PUT    /api/v1/areas/users/{user_id}  – assign_user_area   (admin)
-  DELETE /api/v1/areas/users/{user_id}  – remove_user_area   (admin)
+  PUT    /api/v1/areas/users/{user_id}  – assign_user_area   (self or admin)
+  DELETE /api/v1/areas/users/{user_id}  – remove_user_area   (self or admin)
   GET    /api/v1/areas/users/{user_id}  – get_user_area      (self or admin)
   POST   /api/v1/areas/check-point      – check_point        (authenticated)
   GET    /api/v1/areas/audit            – list_area_audit_logs (admin)
@@ -94,7 +94,7 @@ class TestAssignUserArea:
                 payload=AreaAssignSchema(coordinates=VALID_COORDS),
                 request=fake_request(),
                 db=mock_db,
-                admin=make_admin_user(),
+                user=make_admin_user(),
             )
         print(f"[DEBUG] status_code={exc_info.value.status_code}, detail={exc_info.value.detail!r}")
         assert exc_info.value.status_code == 422
@@ -112,7 +112,7 @@ class TestAssignUserArea:
                 payload=AreaAssignSchema(coordinates=VALID_COORDS),
                 request=fake_request(),
                 db=mock_db,
-                admin=make_admin_user(),
+                user=make_admin_user(),
             )
         print(f"[DEBUG] status_code={exc_info.value.status_code}, detail={exc_info.value.detail!r}")
         assert exc_info.value.status_code == 404
@@ -138,13 +138,13 @@ class TestAssignUserArea:
                 payload=AreaAssignSchema(coordinates=VALID_COORDS),
                 request=fake_request(),
                 db=mock_db,
-                admin=make_admin_user(),
+                user=make_admin_user(),
             )
 
         print(f"[DEBUG] result={result}")
         print(f"[DEBUG] db.add call count={mock_db.add.call_count}")
-        assert result["user_id"] == target_id
-        assert result["has_area"] is True
+        assert result.user_id == target_id
+        assert result.has_area is True
         # db.add called twice: once for the new AuthorizedArea, once for the audit log
         assert mock_db.add.call_count == 2
         mock_db.commit.assert_awaited_once()
@@ -170,7 +170,7 @@ class TestAssignUserArea:
                 payload=AreaAssignSchema(coordinates=VALID_COORDS),
                 request=fake_request(),
                 db=mock_db,
-                admin=make_admin_user(),
+                user=make_admin_user(),
             )
 
         print(f"[DEBUG] result={result}")
@@ -178,7 +178,7 @@ class TestAssignUserArea:
         add_args = [call[0][0] for call in mock_db.add.call_args_list]
         print(f"[DEBUG] objects passed to db.add: {[type(o).__name__ for o in add_args]}")
         assert not any(isinstance(o, AuthorizedArea) for o in add_args)
-        assert result["has_area"] is True
+        assert result.has_area is True
 
 
 # ── remove_user_area ──────────────────────────────────────────────────────────
@@ -191,7 +191,7 @@ class TestRemoveUserArea:
                 user_id="bad-id",
                 request=fake_request(),
                 db=mock_db,
-                admin=make_admin_user(),
+                user=make_admin_user(),
             )
         print(f"[DEBUG] status_code={exc_info.value.status_code}")
         assert exc_info.value.status_code == 422
@@ -205,7 +205,7 @@ class TestRemoveUserArea:
             user_id=target_id,
             request=fake_request(),
             db=mock_db,
-            admin=make_admin_user(),
+            user=make_admin_user(),
         )
 
         print(f"[DEBUG] result={result}")
@@ -222,7 +222,7 @@ class TestRemoveUserArea:
             user_id=target_id,
             request=fake_request(),
             db=mock_db,
-            admin=make_admin_user(),
+            user=make_admin_user(),
         )
 
         print(f"[DEBUG] result={result}")
@@ -240,7 +240,7 @@ class TestRemoveUserArea:
             user_id=str(target_uid),
             request=fake_request(),
             db=mock_db,
-            admin=make_admin_user(),
+            user=make_admin_user(),
         )
 
         print(f"[DEBUG] area.authorized_area after: {area.authorized_area}")
@@ -280,8 +280,8 @@ class TestGetUserArea:
             result = await get_user_area(user_id=str(viewer.user_id), db=mock_db, user=viewer)
 
         print(f"[DEBUG] result={result}")
-        assert result["user_id"] == str(viewer.user_id)
-        assert result["has_area"] is False
+        assert result.user_id == str(viewer.user_id)
+        assert result.has_area is False
 
     async def test_admin_can_access_any_user_area(self, mock_db):
         admin = make_admin_user()
@@ -294,9 +294,9 @@ class TestGetUserArea:
             result = await get_user_area(user_id=target_id, db=mock_db, user=admin)
 
         print(f"[DEBUG] result={result}")
-        assert result["user_id"] == target_id
-        assert result["has_area"] is True
-        assert result["area"] is not None
+        assert result.user_id == target_id
+        assert result.has_area is True
+        assert result.area is not None
 
     async def test_user_with_no_area_row_returns_has_area_false(self, mock_db):
         viewer = make_viewer_user()
@@ -306,8 +306,8 @@ class TestGetUserArea:
         result = await get_user_area(user_id=str(viewer.user_id), db=mock_db, user=viewer)
 
         print(f"[DEBUG] result={result}")
-        assert result["has_area"] is False
-        assert result["area"] is None
+        assert result.has_area is False
+        assert result.area is None
 
 
 # ── check_point ───────────────────────────────────────────────────────────────

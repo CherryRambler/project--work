@@ -46,12 +46,22 @@ async def assign_user_area(
     payload: AreaAssignSchema,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_role("admin")),
+    user: User = Depends(get_current_user),
 ):
     try:
         target_uuid = UUID(user_id)
     except ValueError:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid user_id")
+
+    current_role = getattr(user.role, "value", user.role)
+    is_admin = current_role == "admin"
+    is_self = str(user.user_id) == str(target_uuid)
+
+    if not is_admin and not is_self:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. You can only manage your own area.",
+        )
 
     target_user = await db.execute(select(User).where(User.user_id == target_uuid))
     if target_user.scalar_one_or_none() is None:
@@ -67,8 +77,8 @@ async def assign_user_area(
     await write_audit_log(
         db=db,
         action=AuditAction.ASSIGN_USER_AREA,
-        user_id=admin.user_id,
-        user_email=admin.email,
+        user_id=user.user_id,
+        user_email=user.email,
         resource=f"user:{user_id}",
         detail=f"Assigned authorized area to user {user_id}",
         ip_address=get_ip(request),
@@ -89,12 +99,22 @@ async def remove_user_area(
     user_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_role("admin")),
+    user: User = Depends(get_current_user),
 ):
     try:
         target_uuid = UUID(user_id)
     except ValueError:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid user_id")
+
+    current_role = getattr(user.role, "value", user.role)
+    is_admin = current_role == "admin"
+    is_self = str(user.user_id) == str(target_uuid)
+
+    if not is_admin and not is_self:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. You can only manage your own area.",
+        )
 
     area = await get_area_for_user(db, target_uuid)
 
@@ -106,8 +126,8 @@ async def remove_user_area(
     await write_audit_log(
         db=db,
         action=AuditAction.REMOVE_USER_AREA,
-        user_id=admin.user_id,
-        user_email=admin.email,
+        user_id=user.user_id,
+        user_email=user.email,
         resource=f"user:{user_id}",
         detail=f"Removed authorized area from user {user_id}",
         ip_address=get_ip(request),

@@ -3,7 +3,7 @@ import TabRow from "../components/TabRow";
 import PasswordStrength from "../components/PasswordStrength";
 import ErrorBox from "../components/ErrorBox";
 import Logo from "../components/Logo";
-import { loginApi, registerApi } from "../api/auth";
+import { loginApi, registerApi, getMeApi } from "../api/auth";
 import "./AuthPage.css";
 
 export default function AuthPage({ onLogin }) {
@@ -25,9 +25,10 @@ export default function AuthPage({ onLogin }) {
     try {
       if (activeTab === "login") {
         const response = await loginApi(email, password);
-        
+
         if (response.access_token && response.refresh_token) {
-          onLogin(response, response.access_token);
+          const me = await getMeApi(response.access_token);
+          onLogin(me, response.access_token, response.refresh_token);
         } else {
           setError("Invalid response from server");
         }

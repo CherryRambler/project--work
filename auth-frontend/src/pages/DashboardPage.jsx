@@ -12,13 +12,17 @@ export default function DashboardPage({ user, token, onLogout }) {
   const [creating, setCreating] = useState(false);
 
   const fetchAreas = async () => {
-    if (!user?.id) return;
+    if (!user?.user_id) return;
     
     setLoading(true);
     setError("");
     try {
-      const data = await getUserAreasApi(token, user.id);
-      setAreas(Array.isArray(data) ? data : []);
+      const data = await getUserAreasApi(token, user.user_id);
+      setAreas(
+        data?.has_area && data.area
+          ? [{ user_id: data.user_id, geometry: data.area }]
+          : []
+      );
     } catch (err) {
       setError(err.message);
     } finally {
@@ -28,10 +32,10 @@ export default function DashboardPage({ user, token, onLogout }) {
 
   useEffect(() => {
     fetchAreas();
-  }, [token, user?.id]);
+  }, [token, user?.user_id]);
 
   const handleCreateArea = async (coords) => {
-    if (!user?.id) {
+    if (!user?.user_id) {
       setError("User ID not available");
       return;
     }
@@ -39,7 +43,7 @@ export default function DashboardPage({ user, token, onLogout }) {
     setCreating(true);
     setError("");
     try {
-      await createAreaApi(token, user.id, coords);
+      await createAreaApi(token, user.user_id, coords);
       await fetchAreas();
     } catch (err) {
       setError(err.message);
@@ -49,14 +53,14 @@ export default function DashboardPage({ user, token, onLogout }) {
   };
 
   const handleDeleteArea = async (areaId) => {
-    if (!user?.id) {
+    if (!user?.user_id) {
       setError("User ID not available");
       return;
     }
     
     setError("");
     try {
-      await deleteAreaApi(token, user.id);
+      await deleteAreaApi(token, user.user_id);
       await fetchAreas();
     } catch (err) {
       setError(err.message);
