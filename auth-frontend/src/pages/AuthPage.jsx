@@ -1,179 +1,175 @@
-// src/pages/AuthPage.jsx
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { registerApi } from '../api/auth';
-import TabRow from '../components/TabRow';
-import Logo from '../components/Logo';
-import ErrorBox from '../components/ErrorBox';
-import PasswordStrength from '../components/PasswordStrength';
-import './AuthPage.css';
+import { useState } from "react";
+import TabRow from "../components/TabRow";
+import PasswordStrength from "../components/PasswordStrength";
+import ErrorBox from "../components/ErrorBox";
+import Logo from "../components/Logo";
+import { loginApi, registerApi } from "../api/auth";
+import "./AuthPage.css";
 
-export default function AuthPage() {
-  const { login, user } = useAuth();
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('login');
-  const [error, setError] = useState('');
+export default function AuthPage({ onLogin }) {
+  const [activeTab, setActiveTab] = useState("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [userName, setUserName] = useState("");
+  const [phoneNo, setPhoneNo] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  // Redirect if already logged in
-  useEffect(() => {
-    if (user) {
-      navigate('/');
-    }
-  }, [user, navigate]);
-
-  const [loginForm, setLoginForm] = useState({
-    email: '',
-    password: '',
-  });
-
-  const [registerForm, setRegisterForm] = useState({
-    user_name: '',
-    email: '',
-    phone_no: '',
-    password: '',
-  });
-
-  const handleLogin = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
+    setError("");
+    setSuccess("");
     setLoading(true);
-    
+
     try {
-      await login(loginForm.email, loginForm.password);
-      // The useEffect will handle navigation when user is set
+      if (activeTab === "login") {
+        const response = await loginApi(email, password);
+        
+        if (response.access_token && response.refresh_token) {
+          onLogin(response, response.access_token);
+        } else {
+          setError("Invalid response from server");
+        }
+      } else {
+        if (!userName.trim()) {
+          setError("Username is required");
+          setLoading(false);
+          return;
+        }
+        
+        await registerApi({
+          user_name: userName,
+          email,
+          phone_no: phoneNo || "N/A",
+          password,
+        });
+        
+        setSuccess("Account created successfully! Please sign in.");
+        setUserName("");
+        setEmail("");
+        setPhoneNo("");
+        setPassword("");
+        setActiveTab("login");
+      }
     } catch (err) {
-      setError(err.message || 'Login failed');
+      setError(err.message || "Authentication failed");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    
-    try {
-      await registerApi(registerForm);
-      // After successful registration, switch to login
-      setActiveTab('login');
-      setLoginForm({ email: registerForm.email, password: '' });
-      setRegisterForm({
-        user_name: '',
-        email: '',
-        phone_no: '',
-        password: '',
-      });
-      setError('Registration successful! Please login.');
-    } catch (err) {
-      setError(err.message || 'Registration failed');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const isRegister = activeTab === "register";
+  const isLogin = activeTab === "login";
 
   return (
     <div className="auth-page">
-      <div className="auth-card">
+      <div style={{ textAlign: "center", marginBottom: "24px" }}>
         <Logo />
+      </div>
+      
+      <div className="auth-card">
         <TabRow active={activeTab} onChange={setActiveTab} />
         
-        {error && <ErrorBox message={error} />}
+        <div className="auth-header">
+          <h2>{isLogin ? "Welcome Back" : "Create Account"}</h2>
+          <p className="subtitle">
+            {isLogin 
+              ? "Sign in to manage your areas" 
+              : "Get started with AuthKit"}
+          </p>
+        </div>
 
-        {activeTab === 'login' ? (
-          <form onSubmit={handleLogin} className="auth-form">
-            <div className="field">
-              <label htmlFor="login-email">Email</label>
-              <input
-                id="login-email"
-                type="email"
-                placeholder="you@example.com"
-                value={loginForm.email}
-                onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
-                required
-                disabled={loading}
-              />
-            </div>
-            
-            <div className="field">
-              <label htmlFor="login-password">Password</label>
-              <input
-                id="login-password"
-                type="password"
-                placeholder="••••••••"
-                value={loginForm.password}
-                onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                required
-                disabled={loading}
-              />
-            </div>
-            
-            <button type="submit" className="auth-btn" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign in'}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleRegister} className="auth-form">
-            <div className="field">
-              <label htmlFor="register-username">Username</label>
-              <input
-                id="register-username"
-                type="text"
-                placeholder="johndoe"
-                value={registerForm.user_name}
-                onChange={(e) => setRegisterForm({ ...registerForm, user_name: e.target.value })}
-                required
-                disabled={loading}
-              />
-            </div>
-            
-            <div className="field">
-              <label htmlFor="register-email">Email</label>
-              <input
-                id="register-email"
-                type="email"
-                placeholder="you@example.com"
-                value={registerForm.email}
-                onChange={(e) => setRegisterForm({ ...registerForm, email: e.target.value })}
-                required
-                disabled={loading}
-              />
-            </div>
-            
-            <div className="field">
-              <label htmlFor="register-phone">Phone Number</label>
-              <input
-                id="register-phone"
-                type="tel"
-                placeholder="+1234567890"
-                value={registerForm.phone_no}
-                onChange={(e) => setRegisterForm({ ...registerForm, phone_no: e.target.value })}
-                required
-                disabled={loading}
-              />
-            </div>
-            
-            <div className="field">
-              <label htmlFor="register-password">Password</label>
-              <input
-                id="register-password"
-                type="password"
-                placeholder="••••••••"
-                value={registerForm.password}
-                onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
-                required
-                disabled={loading}
-              />
-              <PasswordStrength password={registerForm.password} />
-            </div>
-            
-            <button type="submit" className="auth-btn" disabled={loading}>
-              {loading ? 'Creating account...' : 'Create account'}
-            </button>
-          </form>
-        )}
+        {error && <ErrorBox message={error} />}
+        {success && <div className="auth-success">✓ {success}</div>}
+
+        <form className="auth-form" onSubmit={handleSubmit}>
+          {isRegister && (
+            <>
+              <div className="form-group">
+                <label htmlFor="username">Username</label>
+                <input
+                  id="username"
+                  type="text"
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  placeholder="Choose a username"
+                  required
+                  disabled={loading}
+                  autoComplete="username"
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="phone">Phone Number (optional)</label>
+                <input
+                  id="phone"
+                  type="tel"
+                  value={phoneNo}
+                  onChange={(e) => setPhoneNo(e.target.value)}
+                  placeholder="+1 234 567 890"
+                  disabled={loading}
+                  autoComplete="tel"
+                />
+              </div>
+            </>
+          )}
+
+          <div className="form-group">
+            <label htmlFor="email">Email address</label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
+              disabled={loading}
+              autoComplete="email"
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={isLogin ? "Enter your password" : "Create a password"}
+              required
+              disabled={loading}
+              autoComplete={isLogin ? "current-password" : "new-password"}
+              minLength={8}
+            />
+            {isRegister && <PasswordStrength password={password} />}
+          </div>
+
+          <button 
+            type="submit" 
+            className="auth-submit-btn" 
+            disabled={loading}
+          >
+            {loading ? "Processing..." : (isLogin ? "Sign In" : "Create Account")}
+          </button>
+        </form>
+
+        <div className="auth-footer">
+          {isLogin ? (
+            <>
+              Don't have an account?{" "}
+              <a href="#" onClick={(e) => { e.preventDefault(); setActiveTab("register"); }}>
+                Create one
+              </a>
+            </>
+          ) : (
+            <>
+              Already have an account?{" "}
+              <a href="#" onClick={(e) => { e.preventDefault(); setActiveTab("login"); }}>
+                Sign in
+              </a>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

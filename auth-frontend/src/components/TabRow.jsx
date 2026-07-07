@@ -9,7 +9,7 @@ export default function TabRow({ active, onChange }) {
         className={`tab-btn ${active === "login" ? "active" : ""}`}
         onClick={() => onChange("login")}
       >
-        Sign in
+        Sign In
       </button>
       <button
         role="tab"
@@ -17,7 +17,7 @@ export default function TabRow({ active, onChange }) {
         className={`tab-btn ${active === "register" ? "active" : ""}`}
         onClick={() => onChange("register")}
       >
-        Create account
+        Create Account
       </button>
     </div>
   );

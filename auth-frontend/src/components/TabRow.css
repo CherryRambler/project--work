@@ -1,35 +1,53 @@
+/* src/components/TabRow.css */
 .tab-row {
   display: flex;
-  gap: 2px;
-  background: var(--surface2);
+  gap: 4px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius);
+  padding: 4px;
+  margin-bottom: 24px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 3px;
-  margin-bottom: 28px;
 }
 
 .tab-btn {
   flex: 1;
-  padding: 8px 12px;
+  padding: 10px 16px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
   font-family: var(--font);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  letter-spacing: -0.1px;
+  transition: all var(--transition);
+  position: relative;
 }
 
 .tab-btn.active {
   background: var(--surface);
   color: var(--text);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  box-shadow: var(--shadow-md);
+}
+
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 2px;
+  background: var(--primary);
+  border-radius: 1px;
 }
 
 .tab-btn:not(.active):hover {
-  color: var(--text);
-  background: rgba(0,0,0,0.04);
+  color: var(--text-secondary);
+  background: rgba(0,0,0,0.03);
+}
+
+.tab-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
 }

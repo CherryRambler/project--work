@@ -1,112 +1,53 @@
-// src/context/AuthContext.jsx
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { loginApi, logoutApi, getMeApi, refreshTokenApi } from '../api/auth';
+import { createContext, useContext, useState, useEffect } from "react";
 
 const AuthContext = createContext();
 
-export const AuthProvider = ({ children }) => {
+export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('access_token'));
-  const [refreshToken, setRefreshToken] = useState(localStorage.getItem('refresh_token'));
+  const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchUser = async (accessToken) => {
-    try {
-      const userData = await getMeApi(accessToken);
-      setUser(userData);
-      return userData;
-    } catch (error) {
-      console.error('Failed to fetch user:', error);
-      throw error;
-    }
-  };
-
-  const login = async (email, password) => {
-    try {
-      const data = await loginApi(email, password);
-      const { access_token, refresh_token } = data;
-
-      localStorage.setItem('access_token', access_token);
-      localStorage.setItem('refresh_token', refresh_token);
-      setToken(access_token);
-      setRefreshToken(refresh_token);
-
-      const userData = await fetchUser(access_token);
-      return userData;
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const logout = async () => {
-    try {
-      const currentToken = localStorage.getItem('access_token');
-      const currentRefresh = localStorage.getItem('refresh_token');
-
-      if (currentToken && currentRefresh) {
-        await logoutApi(currentToken, currentRefresh);
-      }
-    } catch (error) {
-      console.error('Logout API error:', error);
-    } finally {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      setToken(null);
-      setRefreshToken(null);
-      setUser(null);
-    }
-  };
-
-  // Initialize auth on mount
   useEffect(() => {
-    const initAuth = async () => {
-      const storedToken = localStorage.getItem('access_token');
-      const storedRefresh = localStorage.getItem('refresh_token');
-
-      if (storedToken && storedRefresh) {
-        try {
-          await fetchUser(storedToken);
-        } catch (error) {
-          // Access token likely expired — try the refresh token before giving up.
-          try {
-            const { access_token, refresh_token } = await refreshTokenApi(storedRefresh);
-            localStorage.setItem('access_token', access_token);
-            localStorage.setItem('refresh_token', refresh_token);
-            setToken(access_token);
-            setRefreshToken(refresh_token);
-            await fetchUser(access_token);
-          } catch (refreshError) {
-            console.error('Auth initialization failed:', refreshError);
-            logout();
-          }
-        }
+    const storedUser = localStorage.getItem("user");
+    const storedToken = localStorage.getItem("token");
+    
+    if (storedUser && storedToken) {
+      try {
+        setUser(JSON.parse(storedUser));
+        setToken(storedToken);
+      } catch {
+        localStorage.removeItem("user");
+        localStorage.removeItem("token");
       }
-      setLoading(false);
-    };
-
-    initAuth();
+    }
+    setLoading(false);
   }, []);
 
-  const value = {
-    user,
-    token,
-    refreshToken,
-    loading,
-    login,
-    logout,
+  const login = (userData, authToken) => {
+    setUser(userData);
+    setToken(authToken);
+    localStorage.setItem("user", JSON.stringify(userData));
+    localStorage.setItem("token", authToken);
+  };
+
+  const logout = () => {
+    setUser(null);
+    setToken(null);
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
   };
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{ user, token, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
-};
+}
 
-export const useAuth = () => {
+export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
-};
+}
