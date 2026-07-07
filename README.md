@@ -126,13 +126,14 @@ Stores refresh tokens, platform, IP, and expiry per login session, supporting lo
 | View own assigned area | ✅ | ✅ |
 | View another user's assigned area | ✅ | ❌ |
 | Assign / update an area for any user | ✅ | ❌ |
-| Assign / update their own area | ✅ | ❌ |
-| Delete an assigned area | ✅ | ❌ |
+| Assign / update their own area | ✅ | ✅ |
+| Delete an assigned area (own) | ✅ | ✅ |
+| Delete another user's assigned area | ✅ | ❌ |
 | Activate / deactivate other accounts | ✅ | ❌ |
 | View audit logs | ✅ | ❌ |
 | Run "is my location inside my area" check | ✅ | ✅ |
 
-**Note:** Viewers are strictly read-only with respect to areas — they can see their own assignment and run point-in-polygon checks, but cannot create, edit, or remove any area assignment, including their own. Only an Admin can assign/modify/delete area data.
+**Note:** Viewers can create, update, and delete **their own** authorized area — this matches the frontend, which lets every logged-in user manage only their own area with no separate admin UI. Viewers still cannot view, assign, or delete another user's area; only an Admin has cross-user access.
 
 ---
 
@@ -156,8 +157,8 @@ Stores refresh tokens, platform, IP, and expiry per login session, supporting lo
 ### 5.2 Areas (`/api/v1/areas`)
 | Method | Path | Access | Purpose |
 |---|---|---|---|
-| PUT | `/users/{user_id}` | Admin only | Assign or update a user's authorized area |
-| DELETE | `/users/{user_id}` | Admin only | Remove a user's authorized area |
+| PUT | `/users/{user_id}` | Self or Admin | Assign or update a user's authorized area |
+| DELETE | `/users/{user_id}` | Self or Admin | Remove a user's authorized area |
 | GET | `/users/{user_id}` | Self or Admin | View an assigned area |
 | POST | `/check-point` | Authenticated | Check if a coordinate falls inside the caller's own assigned area |
 | GET | `/audit` | Admin only | View paginated audit log entries |
@@ -178,15 +179,17 @@ Stores refresh tokens, platform, IP, and expiry per login session, supporting lo
 | 8 | `TypeError: unsupported operand type(s) for |` | `X | None` union syntax used on Python 3.9 (requires 3.10+) | Replaced with `Optional[X]` |
 | 9 | Frontend dashboard blank after login | Missing `import { MapContainer, ... } from "react-leaflet"` in `AreaMap.jsx` | Restored the import statement |
 | 10 | Map tiles never rendered (polygon visible, background blank) | Network's authenticating proxy blocked external tile requests (`407 Proxy Authentication Required`) | Replaced Leaflet map with a dependency-free coordinate table component |
-| 11 | Dashboard always showed "No area assigned" despite successful DB save | Frontend expected an array of areas; backend returned a single `{user_id, has_area, area}` object | Normalized backend response into a one-item array in `AuthContext` |
+| 11 | Dashboard always showed "No area assigned" despite successful DB save | Frontend expected an array of areas; backend returned a single `{user_id, has_area, area}` object | Normalized backend response into a one-item array before rendering |
 | 12 | Delete button visible to viewers | No role check in `AreaCard` component | Added `isAdmin` prop to conditionally render the Delete button; backend already enforced `require_role("admin")` independently |
 | 13 | Editor role redundant | Editor had admin-level UI visibility but no distinct backend permissions (identical to viewer in practice) | Removed `editor` from `RoleEnum` and all role checks across frontend and backend |
+| 14 | "Create Area" 403'd for every real user | `assign_user_area` / `remove_user_area` were gated with `require_role("admin")`, but every registration hardcodes `role=viewer` and the frontend has no admin flow — only a self-service dashboard | Changed both endpoints to the same self-or-admin check already used by the area read endpoint, so a user can manage their own area while admins retain access to any user's |
+| 15 | Login returned `500 Internal Server Error` (`asyncpg.exceptions.InvalidPasswordError`) | `DATABASE_URL` in `.env` used a placeholder password that didn't match the local PostgreSQL instance | Updated `.env` with the correct password, URL-encoding the `@` character (`%40`) since a literal `@` in a connection string is parsed as the host separator |
 
 ---
 
 ## 7. Frontend Implementation Notes
 
-- **Stack:** React + Vite, plain CSS (no UI framework), `fetch`-based API client (`api/auth.js`), React Context (`AuthContext.jsx`) for global auth/area state.
+- **Stack:** React + Vite, plain CSS (no UI framework), `fetch`-based API client (`api/auth.js`), auth/area state held locally in `App.jsx` (the earlier `AuthContext.jsx`/`useAuth.js` context layer was removed as redundant — a single top-level component tree didn't need context for this state).
 - **Token storage:** Access and refresh tokens stored in `localStorage`; access token auto-refreshed on expiry using the refresh token.
 - **Area display:** Originally implemented with **Leaflet** (`react-leaflet`) for an interactive map. Replaced with a **plain coordinate table** after the development network's proxy blocked external map tile downloads (`*.tile.openstreetmap.org`), which is an environment limitation rather than a code defect.
 - **Role-aware UI:**
