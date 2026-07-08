@@ -74,12 +74,20 @@ async def register(data: RegisterSchema, request: Request, db: AsyncSession = De
     if existing_phone.scalar_one_or_none():
         raise HTTPException(400, "Phone number already registered")
 
+    try:
+        role = RoleEnum(data.role)
+    except ValueError:
+        raise HTTPException(
+            400,
+            f"Invalid role '{data.role}'. Must be one of: {[r.value for r in RoleEnum]}"
+        )
+
     user = User(
         user_name=data.user_name,
         email=data.email,
         phone_no=data.phone_no,
         hashed_password=hash_password(data.password),
-        role=RoleEnum.viewer,
+        role=role,
     )
 
     db.add(user)
@@ -97,7 +105,6 @@ async def register(data: RegisterSchema, request: Request, db: AsyncSession = De
 
     await db.commit()
     return {"message": "User created"}
-
 
 # ── LOGIN ─────────────────────────────────────────────────────
 @router.post("/login", response_model=TokenResponseSchema)

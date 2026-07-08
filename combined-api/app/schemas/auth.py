@@ -7,6 +7,7 @@ from app.models.user import AccountStatusEnum
 class AccountStatusUpdateSchema(BaseModel):
     account_status: AccountStatusEnum
 
+
 def validate_strong_password(v: str) -> str:
     if len(v) < 8:
         raise ValueError('Password must be at least 8 characters long')
@@ -26,6 +27,7 @@ class RegisterSchema(BaseModel):
     email: EmailStr
     phone_no: str
     password: str
+    role: Optional[str] = "viewer"      
 
     @field_validator('password')
     @classmethod

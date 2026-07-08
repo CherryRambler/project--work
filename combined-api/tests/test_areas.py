@@ -1,18 +1,3 @@
-"""
-Tests for app/routers/areas.py
-
-Mirrors the style of test_auth_router.py: endpoint functions are called
-directly (no HTTP layer), the database is mocked via the `mock_db`
-fixture, and geoalchemy2 / PostGIS calls are patched out so no real
-database or spatial extension is needed.
-
-Endpoint coverage:
-  PUT    /api/v1/areas/users/{user_id}  – assign_user_area   (self or admin)
-  DELETE /api/v1/areas/users/{user_id}  – remove_user_area   (self or admin)
-  GET    /api/v1/areas/users/{user_id}  – get_user_area      (self or admin)
-  POST   /api/v1/areas/check-point      – check_point        (authenticated)
-  GET    /api/v1/areas/audit            – list_area_audit_logs (admin)
-"""
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -94,7 +79,7 @@ class TestAssignUserArea:
                 payload=AreaAssignSchema(coordinates=VALID_COORDS),
                 request=fake_request(),
                 db=mock_db,
-                user=make_admin_user(),
+                admin=make_admin_user(),        
             )
         print(f"[DEBUG] status_code={exc_info.value.status_code}, detail={exc_info.value.detail!r}")
         assert exc_info.value.status_code == 422
@@ -102,9 +87,8 @@ class TestAssignUserArea:
     async def test_user_not_found_raises_404(self, mock_db):
         target_id = str(uuid.uuid4())
         print(f"\n[DEBUG] target user_id={target_id}, db returns None for user lookup")
-        # user lookup returns nothing; get_area_for_user never reached
         mock_db.execute.side_effect = [
-            make_scalar_result(None),   # User lookup → not found
+            make_scalar_result(None),
         ]
         with pytest.raises(HTTPException) as exc_info:
             await assign_user_area(
@@ -112,7 +96,7 @@ class TestAssignUserArea:
                 payload=AreaAssignSchema(coordinates=VALID_COORDS),
                 request=fake_request(),
                 db=mock_db,
-                user=make_admin_user(),
+                admin=make_admin_user(),       
             )
         print(f"[DEBUG] status_code={exc_info.value.status_code}, detail={exc_info.value.detail!r}")
         assert exc_info.value.status_code == 404
@@ -122,8 +106,8 @@ class TestAssignUserArea:
         target_id = str(target_user.user_id)
         print(f"\n[DEBUG] target user exists, no existing area → should db.add() a new AuthorizedArea")
         mock_db.execute.side_effect = [
-            make_scalar_result(target_user),   # User lookup → found
-            make_scalar_result(None),           # get_area_for_user → no existing area
+            make_scalar_result(target_user),
+            make_scalar_result(None),
         ]
         mock_db.refresh = AsyncMock(side_effect=lambda obj: setattr(
             obj, "authorized_area", MagicMock()
@@ -138,14 +122,13 @@ class TestAssignUserArea:
                 payload=AreaAssignSchema(coordinates=VALID_COORDS),
                 request=fake_request(),
                 db=mock_db,
-                user=make_admin_user(),
+                admin=make_admin_user(),        
             )
 
         print(f"[DEBUG] result={result}")
         print(f"[DEBUG] db.add call count={mock_db.add.call_count}")
         assert result.user_id == target_id
         assert result.has_area is True
-        # db.add called twice: once for the new AuthorizedArea, once for the audit log
         assert mock_db.add.call_count == 2
         mock_db.commit.assert_awaited_once()
 
@@ -170,11 +153,10 @@ class TestAssignUserArea:
                 payload=AreaAssignSchema(coordinates=VALID_COORDS),
                 request=fake_request(),
                 db=mock_db,
-                user=make_admin_user(),
+                admin=make_admin_user(),     
             )
 
         print(f"[DEBUG] result={result}")
-        # Only the audit log triggers db.add; the area object is already tracked
         add_args = [call[0][0] for call in mock_db.add.call_args_list]
         print(f"[DEBUG] objects passed to db.add: {[type(o).__name__ for o in add_args]}")
         assert not any(isinstance(o, AuthorizedArea) for o in add_args)
@@ -191,7 +173,7 @@ class TestRemoveUserArea:
                 user_id="bad-id",
                 request=fake_request(),
                 db=mock_db,
-                user=make_admin_user(),
+                admin=make_admin_user(),      
             )
         print(f"[DEBUG] status_code={exc_info.value.status_code}")
         assert exc_info.value.status_code == 422
@@ -205,7 +187,7 @@ class TestRemoveUserArea:
             user_id=target_id,
             request=fake_request(),
             db=mock_db,
-            user=make_admin_user(),
+            admin=make_admin_user(),            
         )
 
         print(f"[DEBUG] result={result}")
@@ -222,7 +204,7 @@ class TestRemoveUserArea:
             user_id=target_id,
             request=fake_request(),
             db=mock_db,
-            user=make_admin_user(),
+            admin=make_admin_user(),            
         )
 
         print(f"[DEBUG] result={result}")
@@ -240,7 +222,7 @@ class TestRemoveUserArea:
             user_id=str(target_uid),
             request=fake_request(),
             db=mock_db,
-            user=make_admin_user(),
+            admin=make_admin_user(),           
         )
 
         print(f"[DEBUG] area.authorized_area after: {area.authorized_area}")
@@ -328,7 +310,7 @@ class TestCheckPoint:
 
         print(f"[DEBUG] status_code={exc_info.value.status_code}, detail={exc_info.value.detail!r}")
         assert exc_info.value.status_code == 403
-        mock_db.commit.assert_awaited_once()  # audit log commit still happens
+        mock_db.commit.assert_awaited_once()
 
     async def test_user_with_area_row_but_null_geometry_raises_403(self, mock_db):
         user = make_viewer_user()
@@ -356,8 +338,8 @@ class TestCheckPoint:
 
         print(f"\n[DEBUG] ST_Contains returns True → inside=True")
         mock_db.execute.side_effect = [
-            make_scalar_result(area),    # get_area_for_user
-            st_contains_result,           # ST_Contains query
+            make_scalar_result(area),
+            st_contains_result,
         ]
 
         result = await check_point(
@@ -413,7 +395,6 @@ class TestCheckPoint:
             user=user,
         )
 
-        # Audit log is written via db.add
         add_args = [call[0][0] for call in mock_db.add.call_args_list]
         print(f"\n[DEBUG] objects added to db: {[type(o).__name__ for o in add_args]}")
         assert any(isinstance(o, AuditLog) for o in add_args)
@@ -478,5 +459,4 @@ class TestListAreaAuditLogs:
             offset=20,
         )
 
-        # db.execute must be called exactly once (for the paginated query)
         assert mock_db.execute.call_count == 1
