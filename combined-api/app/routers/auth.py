@@ -17,6 +17,7 @@ from app.core.security import (
 from app.core.config import settings
 from app.core.audit_logger import write_audit_log
 from app.core.audit_actions import AuditAction
+from app.core.request_utils import get_ip
 from app.models.user import User, RoleEnum, AccountStatusEnum
 from app.models.session import UserSession
 from app.schemas.auth import (
@@ -26,23 +27,16 @@ from app.schemas.auth import (
     PasswordChangeSchema,
     RefreshTokenSchema,
     TokenResponseSchema,
-    AccessTokenResponseSchema,
     LogoutSchema,
     AccountStatusUpdateSchema,
+    UserProfileResponse,
+    UserListItemResponse,
 )
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_DURATION = timedelta(minutes=5)
-
-
-def get_ip(request: Request) -> str:
-    if settings.TRUST_PROXY_HEADERS:
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
 
 
 async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
@@ -477,7 +471,7 @@ async def update_account_status(
 
 
 # ── LIST USERS (admin) ────────────────────────────────────────────────────────
-@router.get("/users")
+@router.get("/users", response_model=list[UserListItemResponse])
 async def list_users(
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(require_role("admin")),
@@ -496,30 +490,30 @@ async def list_users(
     rows = result.all()
 
     return [
-        {
-            "user_id": str(user.user_id),
-            "user_name": user.user_name,
-            "email": user.email,
-            "role": user.role,
-            "account_status": user.account_status,
-            "has_area": area is not None and area.authorized_area is not None,
-        }
+        UserListItemResponse(
+            user_id=str(user.user_id),
+            user_name=user.user_name,
+            email=user.email,
+            role=user.role,
+            account_status=user.account_status,
+            has_area=area is not None and area.authorized_area is not None,
+        )
         for user, area in rows
     ]
 
 
 # ── ME ─────────────────────────────────────────────────────
-@router.get("/me")
+@router.get("/me", response_model=UserProfileResponse)
 async def me(user: User = Depends(get_current_user)):
-    return {
-        "user_id": str(user.user_id),
-        "user_name": user.user_name,
-        "email": user.email,
-        "phone_no": user.phone_no,
-        "role": user.role,
-        "account_status": user.account_status,
-        "created_at": user.created_at,
-    }
+    return UserProfileResponse(
+        user_id=str(user.user_id),
+        user_name=user.user_name,
+        email=user.email,
+        phone_no=user.phone_no,
+        role=user.role,
+        account_status=user.account_status,
+        created_at=user.created_at,
+    )
 
 
 # ── UPDATE ME ─────────────────────────────────────────────────────

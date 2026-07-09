@@ -1,7 +1,8 @@
 from pydantic import BaseModel, EmailStr, field_validator
 import re
+from datetime import datetime
 from typing import Optional
-from app.models.user import AccountStatusEnum
+from app.models.user import AccountStatusEnum, RoleEnum
 
 
 class AccountStatusUpdateSchema(BaseModel):
@@ -68,3 +69,25 @@ class AccessTokenResponseSchema(BaseModel):
 
 class LogoutSchema(BaseModel):
     refresh_token: str
+
+
+class UserProfileResponse(BaseModel):
+    user_id: str
+    user_name: str
+    email: str
+    phone_no: str
+    role: RoleEnum
+    account_status: AccountStatusEnum
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class UserListItemResponse(BaseModel):
+    user_id: str
+    user_name: str
+    email: str
+    role: RoleEnum
+    account_status: AccountStatusEnum
+    has_area: bool

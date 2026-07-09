@@ -1,36 +1,22 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from geoalchemy2.shape import from_shape, to_shape
-from shapely.geometry import mapping, shape
+from shapely.geometry import mapping
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
 from app.core.audit_actions import AuditAction
 from app.core.audit_logger import write_audit_log
-from app.core.config import settings
 from app.core.dependencies import get_current_user, get_db, require_role
+from app.core.geo_utils import coords_to_polygon
+from app.core.request_utils import get_ip
 from app.models.audit_log import AuditLog
 from app.models.authorized_area import AuthorizedArea
 from app.models.user import User
 from app.schemas.area import AreaAssignSchema, PointCheckSchema, UserAreaResponse
 
 router = APIRouter(prefix="/api/v1/areas", tags=["Authorized Areas"])
-
-
-def get_ip(request: Request) -> str:
-    if settings.TRUST_PROXY_HEADERS:
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
-
-
-def coords_to_polygon(coordinates: list):
-    ring = coordinates[:]
-    if ring[0] != ring[-1]:
-        ring.append(ring[0])
-    return shape({"type": "Polygon", "coordinates": [ring]})
 
 
 async def get_area_for_user(db: AsyncSession, user_id: UUID) -> Optional[AuthorizedArea]:

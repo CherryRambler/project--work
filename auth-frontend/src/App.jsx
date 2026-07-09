@@ -29,6 +29,16 @@ function AppContent() {
     setLoading(false);
   }, []);
 
+  useEffect(() => {
+    const handleForcedLogout = () => {
+      setUser(null);
+      setToken(null);
+      setRefreshToken(null);
+    };
+    window.addEventListener("auth:logout", handleForcedLogout);
+    return () => window.removeEventListener("auth:logout", handleForcedLogout);
+  }, []);
+
   const handleLogin = (userData, authToken, authRefreshToken) => {
     setUser(userData);
     setToken(authToken);

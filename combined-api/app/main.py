@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers.auth import router as auth_router
 from app.routers.areas import router as areas_router
+from app.routers.surveys import router as surveys_router
 
 app = FastAPI(title="Combined API")
 
@@ -16,6 +17,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(areas_router)
+app.include_router(surveys_router)
 
 
 @app.get("/")
