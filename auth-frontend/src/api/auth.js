@@ -1,4 +1,4 @@
-import { AUTH_API_PREFIX, AREA_API_PREFIX, apiRequest } from "./config";
+import { API_BASE_URL, AUTH_API_PREFIX, AREA_API_PREFIX, apiRequest } from "./config";
 
 
 export async function registerApi({ user_name, email, phone_no, password }) {
@@ -76,5 +76,59 @@ export async function checkPointApi(token, longitude, latitude) {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ longitude, latitude }),
+  });
+}
+
+
+// SURVEY API CALLS
+
+const SURVEY_BASE = `${API_BASE_URL}/api/v1/surveys`;
+
+export async function createSurveyApi(token, data) {
+  return apiRequest(SURVEY_BASE, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getAllSurveysApi(token) {
+  return apiRequest(SURVEY_BASE, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function getMySurveysApi(token) {
+  return apiRequest(`${SURVEY_BASE}/my`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function getSurveyApi(token, id) {
+  return apiRequest(`${SURVEY_BASE}/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function verifySurveyApi(token, id, verified_status) {
+  return apiRequest(`${SURVEY_BASE}/${id}/verify`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ verified_status }),
+  });
+}
+
+export async function adminUpdateSurveyApi(token, id, data) {
+  return apiRequest(`${SURVEY_BASE}/${id}`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteSurveyApi(token, id) {
+  return apiRequest(`${SURVEY_BASE}/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
   });
 }
