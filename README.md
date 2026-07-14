@@ -4,9 +4,9 @@
 
 This project implements a **role-based access control (RBAC) system** for assigning and managing geographic "authorized areas" to users. It consists of:
 
-- A **backend API** (originally two separate FastAPI microservices — `auth-api` and `area-api` — later merged into a single **`combined-api`**)
-- A **PostgreSQL + PostGIS** database for storing users, sessions, audit logs, and geospatial area data
-- A **React (Vite) frontend** for registration, login, and viewing/managing assigned areas
+- A **backend API** (`area-auth-api/`) — originally two separate FastAPI microservices (`auth-api` and `area-api`), later merged into a single service
+- A **PostgreSQL + PostGIS** database for storing users, sessions, audit logs, and geospatial area/survey data
+- A **React (Vite) frontend** (`auth-frontend/`) for registration, login, and viewing/managing assigned areas
 
 The system supports two user roles: **Admin** and **Viewer** (a third role, **Editor**, was initially included and later removed due to redundancy).
 
@@ -20,7 +20,8 @@ The system supports two user roles: **Admin** and **Viewer** (a third role, **Ed
 - Each service had its **own PostgreSQL database** (`auth_db` and `area_db`).
 - Because the two services didn't share a database, `area-api` could not maintain a real foreign key to the `users` table. It instead used a **`user_references`** cache table to mirror minimal user data (`user_id`, `role`, `is_active`) needed for authorization checks.
 
-### 2.2 Final Design — Merged into a Single Service (`combined-api`)
+### 2.2 Final Design — Merged into a Single Service (`area-auth-api`)
+
 To eliminate the data-sync problems and redundant cache table, both services were merged into one FastAPI application:
 - Single port (`8000`)
 - Single database (`auth_db`)
@@ -28,37 +29,47 @@ To eliminate the data-sync problems and redundant cache table, both services wer
 - The `user_references` cache table was replaced by a proper **`authorized_areas`** table with a real foreign key to `users.user_id` (`ON DELETE CASCADE`)
 - `dependencies.py`, `areas.py`, and `auth.py` were consolidated into one shared codebase
 
-**Folder structure (combined-api):**
+**Folder structure (`area-auth-api/`):**
 ```
-combined-api/
-├── .env
+area-auth-api/
+├── .env.example
+├── pytest.ini
 ├── requirements.txt
-└── app/
-    ├── main.py
-    ├── core/
-    │   ├── config.py
-    │   ├── security.py
-    │   ├── dependencies.py
-    │   ├── audit_logger.py
-    │   ├── audit_actions.py
-    │   ├── geo_utils.py
-    │   └── request_utils.py
-    ├── db/
-    │   └── session.py
-    ├── models/
-    │   ├── user.py
-    │   ├── session.py
-    │   ├── authorized_area.py
-    │   ├── survey_record.py
-    │   └── audit_log.py
-    ├── schemas/
-    │   ├── auth.py
-    │   ├── area.py
-    │   └── survey.py
-    └── routers/
-        ├── auth.py
-        ├── areas.py
-        └── surveys.py
+├── requirements-test.txt
+├── app/
+│   ├── main.py
+│   ├── core/
+│   │   ├── config.py
+│   │   ├── security.py
+│   │   ├── dependencies.py
+│   │   ├── audit_logger.py
+│   │   ├── audit_actions.py
+│   │   ├── geo_utils.py
+│   │   └── request_utils.py
+│   ├── db/
+│   │   └── session.py
+│   ├── models/
+│   │   ├── user.py
+│   │   ├── session.py
+│   │   ├── authorized_area.py
+│   │   ├── survey_record.py
+│   │   └── audit_log.py
+│   ├── schemas/
+│   │   ├── auth.py
+│   │   ├── area.py
+│   │   └── survey.py
+│   └── routers/
+│       ├── auth.py
+│       ├── areas.py
+│       └── surveys.py
+└── tests/
+    ├── conftest.py
+    ├── test_security.py
+    ├── test_schemas.py
+    ├── test_audit_logger.py
+    ├── test_auth_router.py
+    ├── test_areas.py
+    └── test_surveys_audit.py
 ```
 
 ---
@@ -69,10 +80,11 @@ combined-api/
 
 ![Entity-Relationship Diagram](docs/er-diagram.png)
 
-The diagram above shows the four core tables and their relationships:
+The diagram above shows the core tables and their relationships:
 - **`users` → `audit_logs`** (1-to-N): one user can generate many audit log entries.
 - **`users` → `authorized_areas`** (1-to-1): each user has at most one assigned authorized area, enforced via a foreign key on `authorized_areas.user_id` referencing `users.user_id`.
 - **`users` → `user_sessions`** (1-to-N): one user can have many active login sessions (one per device/login).
+- **`users` → `survey_records`** (1-to-N): one user can own many survey records.
 
 ### 3.1 `users` table
 | Column | Type | Notes |
@@ -110,7 +122,7 @@ The diagram above shows the four core tables and their relationships:
 | created_at | Timestamptz | |
 
 ### 3.4 `sessions` table (UserSession)
-Stores refresh tokens, platform, IP, and expiry per login session, supporting logout / logout-all / session listing. The foreign key to `users.user_id` now cascades on delete, so removing a user cleans up their sessions automatically instead of leaving orphaned rows.
+Stores refresh tokens, platform, IP, and expiry per login session, supporting logout / logout-all / session listing. The foreign key to `users.user_id` cascades on delete, so removing a user cleans up their sessions automatically instead of leaving orphaned rows.
 
 ### 3.5 `survey_records` table (SurveyRecord)
 | Column | Type | Notes |
@@ -133,7 +145,7 @@ Unlike `authorized_areas`, a user can have **many** survey records (no unique co
 - Access tokens embed: `sub` (user_id), `type`, `role`, `is_active`/`account_status`, `exp`.
 - **`get_current_user`** dependency decodes the token, re-fetches the user from the database on **every request**, and rejects the request immediately if `account_status != ACTIVATED` — meaning admin deactivation takes effect instantly, even on a still-valid token, not just on the next login attempt.
 - **`require_role(*roles)`** dependency factory enforces role-based access on specific endpoints.
-- **Response schemas:** `/auth/me` and `/auth/users` now declare explicit Pydantic response models (`UserProfileResponse`, `UserListItemResponse` in `app/schemas/auth.py`) instead of returning raw dicts, so FastAPI validates and documents the response shape in the OpenAPI schema.
+- **Response schemas:** `/auth/me` and `/auth/users` declare explicit Pydantic response models (`UserProfileResponse`, `UserListItemResponse` in `app/schemas/auth.py`) instead of returning raw dicts, so FastAPI validates and documents the response shape in the OpenAPI schema.
 - **Account lockout**: 5 failed login attempts locks the account for 5 minutes (`locked_until`), with an admin-only `/unlock/{user_id}` endpoint to manually clear it.
 
 ### 4.1 Role Permissions Summary
@@ -170,6 +182,7 @@ Unlike `authorized_areas`, a user can have **many** survey records (no unique co
 | GET | `/me` | Authenticated | Get own profile |
 | PUT | `/me` | Authenticated | Update own phone number |
 | PUT | `/me/password` | Authenticated | Change own password |
+| GET | `/users` | Admin only | List all users |
 | POST | `/unlock/{user_id}` | Admin only | Clear failed-login lockout |
 | PUT | `/users/{user_id}/status` | Admin only | Activate/deactivate another user's account |
 
@@ -183,7 +196,7 @@ Unlike `authorized_areas`, a user can have **many** survey records (no unique co
 | GET | `/audit` | Admin only | View paginated audit log entries |
 
 ### 5.3 Survey Records (`/api/v1/surveys`)
-A new resource distinct from `authorized_areas`: a user can have **multiple** survey records (one per plot surveyed), each with its own polygon, village/plot labels, and an admin-controlled verification flag.
+A resource distinct from `authorized_areas`: a user can have **multiple** survey records (one per plot surveyed), each with its own polygon, village/plot labels, and an admin-controlled verification flag.
 
 | Method | Path | Access | Purpose |
 |---|---|---|---|
@@ -195,7 +208,7 @@ A new resource distinct from `authorized_areas`: a user can have **multiple** su
 | PUT | `/{record_id}` | Admin only | Update village/plot/coordinates/status, or reassign to another user |
 | DELETE | `/{record_id}` | Admin only | Delete a survey record |
 
-Polygon coordinates are validated (`app/schemas/survey.py`): at least 3 unique `[longitude, latitude]` pairs within valid ranges, with the ring auto-closed if the first and last points don't match. Polygon construction (`coords_to_polygon`) and audit-log IP extraction (`get_ip`) were pulled out of `areas.py`/`auth.py` into shared `app/core/geo_utils.py` and `app/core/request_utils.py` modules, since both the areas and surveys routers needed them.
+Polygon coordinates are validated (`app/schemas/survey.py`): at least 3 unique `[longitude, latitude]` pairs within valid ranges, with the ring auto-closed if the first and last points don't match. Polygon construction (`coords_to_polygon`) and audit-log IP extraction (`get_ip`) live in shared `app/core/geo_utils.py` and `app/core/request_utils.py` modules, since both the areas and surveys routers need them.
 
 ---
 
@@ -210,7 +223,7 @@ Polygon coordinates are validated (`app/schemas/survey.py`): at least 3 unique `
 | 5 | `422 Unprocessable Entity` on area assignment | Coordinates sent with an extra nesting level (`[[[...]]]` instead of `[[...]]`) | Corrected request body shape |
 | 6 | `relation does not exist` (multiple tables) | Tables defined in SQLAlchemy models but never created in the actual database | Manually ran `CREATE TABLE` (and later `Base.metadata.create_all`) |
 | 7 | `NoReferencedTableError` on `audit_logs.user_id` | Foreign key pointed to a `users` table that didn't exist in that service's database (pre-merge) | Removed cross-database FK; used plain UUID column |
-| 8 | `TypeError: unsupported operand type(s) for |` | `X | None` union syntax used on Python 3.9 (requires 3.10+) | Replaced with `Optional[X]` |
+| 8 | `TypeError: unsupported operand type(s) for \|` | `X \| None` union syntax used on Python 3.9 (requires 3.10+) | Replaced with `Optional[X]` |
 | 9 | Frontend dashboard blank after login | Missing `import { MapContainer, ... } from "react-leaflet"` in `AreaMap.jsx` | Restored the import statement |
 | 10 | Map tiles never rendered (polygon visible, background blank) | Network's authenticating proxy blocked external tile requests (`407 Proxy Authentication Required`) | Replaced Leaflet map with a dependency-free coordinate table component |
 | 11 | Dashboard always showed "No area assigned" despite successful DB save | Frontend expected an array of areas; backend returned a single `{user_id, has_area, area}` object | Normalized backend response into a one-item array before rendering |
@@ -219,13 +232,16 @@ Polygon coordinates are validated (`app/schemas/survey.py`): at least 3 unique `
 | 14 | "Create Area" 403'd for every real user | `assign_user_area` / `remove_user_area` were gated with `require_role("admin")`, but every registration hardcodes `role=viewer` and the frontend has no admin flow — only a self-service dashboard | Changed both endpoints to the same self-or-admin check already used by the area read endpoint, so a user can manage their own area while admins retain access to any user's |
 | 15 | Login returned `500 Internal Server Error` (`asyncpg.exceptions.InvalidPasswordError`) | `DATABASE_URL` in `.env` used a placeholder password that didn't match the local PostgreSQL instance | Updated `.env` with the correct password, URL-encoding the `@` character (`%40`) since a literal `@` in a connection string is parsed as the host separator |
 | 16 | Users silently logged out whenever an access token expired mid-session, even though a valid refresh token existed | `apiRequest` had no handling for `401` responses — it just surfaced the failed request | Added transparent refresh-and-retry to `apiRequest` (`auth-frontend/src/api/config.js`): on a `401` from an authenticated call, it calls `/auth/refresh` once (coalescing concurrent 401s into a single in-flight refresh via a shared promise), retries the original request with the new access token, and only forces a full logout (`auth:logout` event → clears state in `App.jsx`) if the refresh itself fails |
-| 17 | Deleting a user could leave orphaned `user_sessions` rows | `UserSession.user_id` FK had no `ON DELETE CASCADE` | Added `ondelete="CASCADE"` to the FK, matching `authorized_areas` and the new `survey_records` table |
+| 17 | Deleting a user could leave orphaned `user_sessions` rows | `UserSession.user_id` FK had no `ON DELETE CASCADE` | Added `ondelete="CASCADE"` to the FK, matching `authorized_areas` and `survey_records` |
+| 18 | Lockout message showed the wrong minute count for any lockout duration ≥ 1 day | Used `timedelta.seconds // 60`, which returns only the sub-day remainder of the duration, not the total | Changed to `timedelta.total_seconds() // 60` in `auth.py`'s lockout messages |
+| 19 | Logging out left a stale `refreshToken` in `localStorage` (only in the unused `AuthContext.jsx`/`useAuth.js` context layer — the live `App.jsx` state path was unaffected) | `logout()` in `AuthContext.jsx` cleared `user`/`token` but not `refreshToken` | Added the missing `localStorage.removeItem("refreshToken")` |
 
 ---
 
 ## 7. Frontend Implementation Notes
 
-- **Stack:** React + Vite, plain CSS (no UI framework), `fetch`-based API client (`api/auth.js`), auth/area state held locally in `App.jsx` (the earlier `AuthContext.jsx`/`useAuth.js` context layer was removed as redundant — a single top-level component tree didn't need context for this state).
+- **Stack:** React + Vite, plain CSS (no UI framework), `fetch`-based API client (`api/auth.js`), auth/area state held locally in `App.jsx`.
+- **Dead code:** `src/context/AuthContext.jsx` and `src/hooks/useAuth.js` implement an alternate React-context auth layer, but neither is imported by `App.jsx` or `main.jsx` — the app manages auth state directly in `App.jsx` instead. They're currently unused; keep this in mind before assuming a change to one of them affects the running app.
 - **Token storage:** Access and refresh tokens stored in `localStorage`; access token auto-refreshed on expiry using the refresh token — handled transparently inside `apiRequest` (see bug #16) rather than by each call site.
 - **Area display:** Originally implemented with **Leaflet** (`react-leaflet`) for an interactive map. Replaced with a **plain coordinate table** after the development network's proxy blocked external map tile downloads (`*.tile.openstreetmap.org`), which is an environment limitation rather than a code defect.
 - **Role-aware UI:**
@@ -239,20 +255,129 @@ Polygon coordinates are validated (`app/schemas/survey.py`): at least 3 unique `
 
 - **Database access:** PostgreSQL was temporarily configured for LAN access (`listen_addresses`, `pg_hba.conf`, Windows Firewall rule) to support testing from a second machine, then reverted to localhost-only afterward.
 - **Network restrictions:** The development environment sits behind an authenticating proxy that blocks unauthenticated external HTTPS requests (confirmed via failed Google Fonts and OpenStreetMap tile requests, both returning `407 Proxy Authentication Required`). This shaped the decision to avoid external map tile dependencies in the frontend.
-- **Virtual environments:** Each backend service maintains its own isolated `.venv`, created via `python -m venv .venv` and activated before installing dependencies from `requirements.txt`.
+- **Virtual environments:** The backend maintains its own isolated `.venv`, created via `python -m venv .venv` and activated before installing dependencies from `requirements.txt`.
 
 ---
 
-## 9. Summary of Outcomes
+## 9. Getting Started
 
-- Two independently failure-prone microservices were consolidated into a single, consistent, single-database API, removing an entire class of bugs caused by secret mismatches, missing tables, and cross-service data drift.
+### 9.1 Prerequisites
+
+| Requirement | Version |
+|---|---|
+| Python | 3.11+ |
+| Node.js | 18+ (for the Vite frontend) |
+| PostgreSQL | 14+ with **PostGIS** extension enabled |
+
+Install PostGIS on Ubuntu/Debian: `sudo apt install postgresql-14-postgis-3`
+On macOS with Homebrew: `brew install postgis`
+
+### 9.2 Backend setup (`area-auth-api/`)
+
+```bash
+cd area-auth-api
+
+# Create and activate a virtual environment
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+
+# Install runtime + test dependencies
+pip install -r requirements.txt
+pip install -r requirements-test.txt
+
+# Configure environment
+cp .env.example .env
+# Edit .env: DATABASE_URL, ACCESS_TOKEN_SECRET, REFRESH_TOKEN_SECRET (must differ from each other)
+```
+
+Create the database and enable PostGIS:
+
+```sql
+CREATE DATABASE auth_db;
+\c auth_db
+CREATE EXTENSION IF NOT EXISTS postgis;
+```
+
+Create tables (no Alembic migrations yet):
+
+```bash
+python - <<'EOF'
+import asyncio
+from app.db.session import engine, Base
+from app.models import user, session, audit_log, authorized_area, survey_record  # noqa: F401
+
+async def create():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    print("Tables created.")
+
+asyncio.run(create())
+EOF
+```
+
+Run the API:
+
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+- Interactive API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
+- Health check: [http://localhost:8000/](http://localhost:8000/)
+
+Run tests (`pytest-asyncio`, no real database — all DB calls are mocked):
+
+```bash
+pytest -s -v tests/
+```
+
+### 9.3 Frontend setup (`auth-frontend/`)
+
+```bash
+cd auth-frontend
+npm install
+npm run dev
+```
+
+The API base URL is configured in `src/api/config.js` via `VITE_API_URL` (defaults to `http://127.0.0.1:8000`); the `/api/v1/auth` and `/api/v1/areas` prefixes are appended per-request. Set `VITE_API_URL` in a `.env` file at the frontend root to point at a different backend host.
+
+### 9.4 Example requests
+
+Replace `<ACCESS_TOKEN>` with the token returned by `/login`.
+
+```bash
+# Register
+curl -X POST http://localhost:8000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"user_name":"alice","email":"alice@example.com","phone_no":"9876543210","password":"Secure1!","role":"viewer"}'
+
+# Login
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","password":"Secure1!","platform":"web"}'
+# Response: { "access_token": "...", "refresh_token": "..." }
+
+# Assign a polygon area to a user — admin only ([longitude, latitude] pairs, min 3 points)
+curl -X PUT http://localhost:8000/api/v1/areas/users/<USER_ID> \
+  -H "Authorization: Bearer <ADMIN_ACCESS_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"coordinates":[[72.5,18.5],[73.0,18.5],[73.0,19.0],[72.5,19.0]]}'
+
+# Check if a point is inside the caller's own area
+curl -X POST http://localhost:8000/api/v1/areas/check-point \
+  -H "Authorization: Bearer <ACCESS_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"longitude":72.88,"latitude":19.08}'
+```
+
+---
+
+## 10. Summary of Outcomes
+
+- Two independently failure-prone microservices were consolidated into a single, consistent, single-database API (`area-auth-api`), removing an entire class of bugs caused by secret mismatches, missing tables, and cross-service data drift.
 - Role-based access control is enforced **both** in the UI (hiding actions a role shouldn't see) **and** at the API layer (rejecting unauthorized requests regardless of UI state), per standard defense-in-depth practice.
 - The redundant Editor role was identified and removed, simplifying the permission model to a clean two-role system: **Admin** (full management) and **Viewer** (read-only, self-scoped).
 - Account activation/deactivation was added as an admin capability with **immediate** effect on existing sessions, not just future logins.
 - Geographic area data is now properly modeled with PostGIS, including polygon storage and "is point inside area" checks.
-- A new **survey records** feature was added on top of the existing area system: admins can log multiple per-plot land surveys per user (village, plot, polygon), which either party can then mark as verified — a separate concern from the single "authorized area" used for access control.
+- A **survey records** feature was added on top of the existing area system: admins can log multiple per-plot land surveys per user (village, plot, polygon), which either party can then mark as verified — a separate concern from the single "authorized area" used for access control.
 - Session handling was hardened: expired access tokens are now refreshed transparently instead of forcing a re-login, and user deletion cascades cleanly to sessions.
-- Removed stray duplicate `requirements.txt` files that had been mistakenly created at the repo root and inside `auth-frontend/` (a Node/Vite project); `combined-api/requirements.txt` is the single source of truth for backend dependencies.
-
----
-
+- Removed stray duplicate `README.md` and `requirements.txt` files that had accumulated at `area-auth-api/` and `auth-frontend/`; this file is now the single source of project documentation.

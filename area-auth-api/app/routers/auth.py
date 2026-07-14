@@ -162,14 +162,14 @@ async def login(data: LoginSchema, request: Request, db: AsyncSession = Depends(
                 action=AuditAction.ACCOUNT_LOCKED,
                 user_id=user.user_id,
                 user_email=user.email,
-                detail=f"Account locked for {LOCKOUT_DURATION.seconds // 60} minutes after {MAX_FAILED_ATTEMPTS} failed attempts",
+                detail=f"Account locked for {int(LOCKOUT_DURATION.total_seconds() // 60)} minutes after {MAX_FAILED_ATTEMPTS} failed attempts",
                 ip_address=get_ip(request),
                 success=False,
             )
             await db.commit()
             raise HTTPException(
                 403,
-                f"Too many failed attempts. Account locked for {LOCKOUT_DURATION.seconds // 60} minutes",
+                f"Too many failed attempts. Account locked for {int(LOCKOUT_DURATION.total_seconds() // 60)} minutes",
             )
 
         attempts_left = MAX_FAILED_ATTEMPTS - user.failed_login_attempts
