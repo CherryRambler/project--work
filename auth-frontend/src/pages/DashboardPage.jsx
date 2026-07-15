@@ -256,7 +256,11 @@ export default function DashboardPage({ user, token, onLogout }) {
             Your Areas
             <span className="count-badge">{areas.length}</span>
           </div>
-          <CreateAreaForm onSubmit={handleCreateArea} isLoading={creating} />
+          
+          {/* Only show CreateAreaForm for admin users */}
+          {isAdmin && (
+            <CreateAreaForm onSubmit={handleCreateArea} isLoading={creating} />
+          )}
           
           {loading ? (
             <div style={{ textAlign: "center", padding: "40px 0" }}>
@@ -278,7 +282,9 @@ export default function DashboardPage({ user, token, onLogout }) {
                 No areas created yet
               </h3>
               <p style={{ fontSize: "14px", color: "var(--text-secondary)", marginTop: "4px" }}>
-                Create your first area by entering polygon coordinates above
+                {isAdmin 
+                  ? "Create your first area by entering polygon coordinates above"
+                  : "No areas have been assigned to you yet"}
               </p>
             </div>
           ) : (
